@@ -10,11 +10,13 @@ import numpy as np # Import numpy to avoid secondary issues
 # ================= SETTINGS =================
 SCROLL_SPEED = 50
 SCROLL_THRESHOLD = 0.05
-SMOOTHING = 6
-ZOOM_THRESHOLD = 0.05
-CLICK_THRESHOLD = 0.03
+SMOOTHING = 4      # Reduced for faster response
+MARGIN = 0.15      # Better screen reach
+ZOOM_THRESHOLD = 0.1
+CLICK_THRESHOLD = 0.05
 # ===========================================
 
+pyautogui.PAUSE = 0    # Critical for high FPS
 pyautogui.FAILSAFE = False
 screen_w, screen_h = pyautogui.size()
 
@@ -56,7 +58,11 @@ while True:
             lm = hand.landmark
 
             # ========== MOUSE MOVE (Index) ==========
-            ix, iy = lm[8].x, lm[8].y
+            # Added MARGIN scaling to reach corners easily
+            hx, hy = lm[8].x, lm[8].y
+            ix = np.clip((hx - MARGIN) / (1 - 2 * MARGIN), 0, 1)
+            iy = np.clip((hy - MARGIN) / (1 - 2 * MARGIN), 0, 1)
+
             cur_x = prev_x + (ix - prev_x) / SMOOTHING
             cur_y = prev_y + (iy - prev_y) / SMOOTHING
             prev_x, prev_y = cur_x, cur_y
@@ -86,12 +92,18 @@ while True:
                 cv2.putText(frame, "RIGHT CLICK", (20, 80),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
-            # ========== ZOOM ==========
-            d_zoom = math.hypot(lm[8].x - lm[12].x, lm[8].y - lm[12].y)
-            if d_zoom > ZOOM_THRESHOLD and cooldown(0.5):
-                pyautogui.hotkey('ctrl', '+')
-            elif d_zoom < 0.02 and cooldown(0.5):
-                pyautogui.hotkey('ctrl', '-')
+            # ========== ZOOM (Specific Gesture: Thumb + Index) ==========
+            # Using thumb and index distance for more deliberate zoom
+            d_zoom = math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y)
+            # Only zoom if other fingers are closed to avoid accidental trigger
+            middle_closed = lm[12].y > lm[10].y
+            if middle_closed:
+                if d_zoom > 0.15 and cooldown(0.5):
+                    pyautogui.hotkey('ctrl', '+')
+                    cv2.putText(frame, "ZOOM IN", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,100,0), 2)
+                elif d_zoom < 0.04 and cooldown(0.5):
+                    pyautogui.hotkey('ctrl', '-')
+                    cv2.putText(frame, "ZOOM OUT", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,100,0), 2)
 
             # ========== PALM / FIST ==========
             fingers_up = lm[8].y < lm[6].y and lm[12].y < lm[10].y
