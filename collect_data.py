@@ -5,7 +5,8 @@ import mediapipe as mp
 import csv
 
 # ================= SETTINGS =================
-GESTURE_NAME = "click" # ISKO CHANGE KAREIN: "click", "scroll", "idle", etc.
+GESTURES = ["idle", "jump", "down", "left", "right", "click"]
+gesture_idx = 0
 DATA_FILE = "gestures.csv"
 # ============================================
 
@@ -19,26 +20,15 @@ hands = mp_hands.Hands(
 mp_draw = mp.solutions.drawing_utils
 
 cap = cv2.VideoCapture(0)
-count = 0
-
-# Pehle se kitne samples hain check karein
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, 'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if row and row[0] == GESTURE_NAME:
-                count += 1
 
 print(f"--- Data Collector Started ---")
-print(f"Gesture Name: {GESTURE_NAME}")
-print(f"Pehle ke samples: {count}")
-print("\nInstructions:")
-print("1. Camera ke samne hath dikhayein.")
-print("2. 'S' press karein sample save karne ke liye.")
-print("3. Har gesture ke liye kam se kam 30-50 samples lein.")
-print("4. 'Q' press karein band karne ke liye.")
+print("Instructions:")
+print("1. Press '1'-'6' to change gesture label.")
+print("2. Press 'S' to save sample.")
+print("3. Press 'Q' to quit.")
 
 while True:
+    GESTURE_NAME = GESTURES[gesture_idx]
     success, frame = cap.read()
     if not success: break
     
@@ -50,36 +40,38 @@ while True:
     status_text = "Hand Not Detected"
     status_color = (0, 0, 255)
     
+    key = cv2.waitKey(1) & 0xFF
+    # Switch Gestures
+    if ord('1') <= key <= ord('6'):
+        gesture_idx = key - ord('1')
+        print(f"Switched to: {GESTURES[gesture_idx]}")
+
     if results.multi_hand_landmarks:
         status_text = "Hand Detected"
         status_color = (0, 255, 0)
         for hand_lms in results.multi_hand_landmarks:
             mp_draw.draw_landmarks(frame, hand_lms, mp_hands.HAND_CONNECTIONS)
             
-            # Key check for saving
-            key = cv2.waitKey(1) & 0xFF
             if key == ord('s'):
-                # Saare 21 points save karein
                 data = [GESTURE_NAME]
                 for lm in hand_lms.landmark:
-                    data.extend([lm.x, lm.y, lm.z]) # X, Y, Z coordinates
+                    data.extend([lm.x, lm.y])
                 
                 with open(DATA_FILE, mode='a', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(data)
-                
-                count += 1
-                print(f"Sample #{count} saved!")
+                print(f"Sample saved for {GESTURE_NAME}!")
 
     # UI Overlay
-    cv2.rectangle(frame, (0,0), (300, 120), (0,0,0), -1)
-    cv2.putText(frame, f"Gesture: {GESTURE_NAME}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-    cv2.putText(frame, f"Total Samples: {count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-    cv2.putText(frame, status_text, (10, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+    cv2.rectangle(frame, (0,0), (400, 130), (0,0,0), -1)
+    cv2.putText(frame, f"Current: {GESTURE_NAME}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+    cv2.putText(frame, f"Keys: 1:idle, 2:jump, 3:down", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+    cv2.putText(frame, f"      4:left, 5:right, 6:click", (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+    cv2.putText(frame, status_text, (10, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
     cv2.putText(frame, "S: Save | Q: Quit", (10, h-20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
 
     cv2.imshow("Hand Data Collector", frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if key == ord('q'):
         break
 
 cap.release()
